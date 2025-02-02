@@ -8,11 +8,12 @@ import torch.nn as nn
 import torch.nn.parallel
 import torch.optim
 from models.VGG_models import *
+from models.resnet_models import *
 from torch.utils.data import Subset
 from functions import TET_loss, seed_all, get_logger
-from preprocess import *
+from Preprocess import *
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3,4,5,6,7"
+#os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3,4,5,6,7"
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
@@ -35,7 +36,7 @@ parser.add_argument('--start_epoch',
                     help='manual epoch number (useful on restarts)')
 parser.add_argument('-b',
                     '--batch_size',
-                    default=128,
+                    default=32,
                     type=int,
                     metavar='N',
                     help='mini-batch size (default: 256), this is the total '
@@ -54,12 +55,12 @@ parser.add_argument('--seed',
                     help='seed for initializing training. ')
 parser.add_argument('-T',
                     '--time',
-                    default=2,
+                    default=4,
                     type=int,
                     metavar='N',
                     help='snn simulation time (default: 2)')
 parser.add_argument('--dataset',
-                    default="cifar10",
+                    default="cifar100",
                     type=str,
                     metavar='N',
                     help='Name of the dataset')
@@ -131,13 +132,13 @@ def test(model, test_loader, device):
 
 if __name__ == '__main__':
     seed_all(args.seed)
-    primary_model_path = os.path.join("saved_models", args.dataset, args.model, f"ref_models_{args.reference_models}")
+    primary_model_path = os.path.join("saved_models", args.dataset, "resnet18", f"ref_models_{args.reference_models}")
     for model_idx in range(0, args.reference_models+1):
         full_model_path = os.path.join(primary_model_path, f"model_{model_idx}")
         if os.path.exists(full_model_path) is False:
             print("Creating model directory:", full_model_path)
             os.makedirs(full_model_path)
-        save_path = os.path.join(full_model_path, "VGGSNN.pth")
+        save_path = os.path.join(full_model_path, "ReNetSNN.pth")
         if model_idx==0:
         # Load the dataset using the specified parameters
             dataset = load_dataset(args.dataset)
@@ -158,7 +159,7 @@ if __name__ == '__main__':
         train_loader = get_dataloader_from_dataset(args.dataset, Subset(dataset, train_idxs), batch_size=args.batch_size, train=True)
         test_loader = get_dataloader_from_dataset(args.dataset, Subset(dataset, test_idxs), batch_size=args.batch_size, train=False)
 
-        model = VGGSNN()
+        model = resnet19()
 
         parallel_model = torch.nn.DataParallel(model)
         parallel_model.to(device)
@@ -176,7 +177,7 @@ if __name__ == '__main__':
         
         for epoch in range(args.epochs):
         
-            loss, acc = train(parallel_model, device, train_loader, criterion, optimizer, epoch, args)
+            loss, acc = train(parallel_model, device, train_loader, criterion, optimizer, args)
             logger.info('Epoch:[{}/{}]\t loss={:.5f}\t acc={:.3f}'.format(epoch , args.epochs, loss, acc ))
             scheduler.step()
             facc = test(parallel_model, test_loader, device)

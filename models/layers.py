@@ -85,7 +85,7 @@ class ZIF(torch.autograd.Function):
 
 
 class LIFSpike(nn.Module):
-    def __init__(self, thresh=1.0, tau=0.5, gama=1.0):
+    def __init__(self, thresh=1.0, tau=1, gama=1.0):
         super(LIFSpike, self).__init__()
         self.act = ZIF.apply
         # self.k = 10

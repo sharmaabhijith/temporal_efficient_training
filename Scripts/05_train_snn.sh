@@ -16,7 +16,7 @@
 MODELS=("resnet18")
 
 # Dataset
-DATASETS=("imagenette")
+DATASETS=("cifar100")
 
 # Latency
 LATENCY=4
@@ -29,8 +29,8 @@ for REF in "${REF_MODELS[@]}"; do
 	for DATASET in "${DATASETS[@]}"; do
 		for MODEL in "${MODELS[@]}"; do
 			echo "Training $MODEL on $DATASET..."
-			echo "Training for T = 1"
-			python3 main_training_parallel.py --t $LATENCY --epochs 50 --dataset "$DATASET" --reference_models $REF
+			echo "Training for T = $LATENCY"
+			python3 main_training_parallel.py --t $LATENCY --epochs 100 --dataset "$DATASET" --reference_models $REF
 			echo  "Training finished"
 		done
 		echo "Finished training all models on $DATASET"
