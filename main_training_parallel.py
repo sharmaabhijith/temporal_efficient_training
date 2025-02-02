@@ -8,8 +8,9 @@ import torch.nn as nn
 import torch.nn.parallel
 import torch.optim
 from models.VGG_models import *
-import data_loaders
+from torch.utils.data import Subset
 from functions import TET_loss, seed_all, get_logger
+from preprocess import *
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3,4,5,6,7"
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -57,6 +58,16 @@ parser.add_argument('-T',
                     type=int,
                     metavar='N',
                     help='snn simulation time (default: 2)')
+parser.add_argument('--dataset',
+                    default="cifar10",
+                    type=str,
+                    metavar='N',
+                    help='Name of the dataset')
+parser.add_argument('--reference_models',
+                    default=4,
+                    type=int,
+                    metavar='N',
+                    help='Number of reference models')
 parser.add_argument('--means',
                     default=1.0,
                     type=float,
@@ -75,14 +86,14 @@ parser.add_argument('--lamb',
 args = parser.parse_args()
 
 
-def train(model, device, train_loader, criterion, optimizer, epoch, args):
+def train(model, device, train_loader, criterion, optimizer, args):
     running_loss = 0
     start_time = time.time()
     model.train()
     M = len(train_loader)
     total = 0
     correct = 0
-    for i, (images, labels) in enumerate(train_loader):
+    for (images, labels) in train_loader:
         optimizer.zero_grad()
         labels = labels.to(device)
         images = images.to(device)
@@ -120,39 +131,55 @@ def test(model, test_loader, device):
 
 if __name__ == '__main__':
     seed_all(args.seed)
-    train_dataset, val_dataset = data_loaders.build_dvscifar('cifar-dvs')
-    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True,
-                                               num_workers=args.workers, pin_memory=True)
-    test_loader = torch.utils.data.DataLoader(val_dataset, batch_size=args.batch_size,
-                                              shuffle=False, num_workers=args.workers, pin_memory=True)
+    primary_model_path = os.path.join("saved_models", args.dataset, args.model, f"ref_models_{args.reference_models}")
+    for model_idx in range(0, args.reference_models+1):
+        if model_idx==0:
+        # Load the dataset using the specified parameters
+            dataset = load_dataset(args.dataset)
+            try:
+                data_split_file = os.path.join(primary_model_path, "data_splits.pkl")
+                with open(data_split_file, 'rb') as file:
+                    data_split_info = pickle.load(file)
+                logger.info("Data split information successfully loaded:")
+            except FileNotFoundError:
+                logger.info(f"Error: The file '{data_split_file}' does not exist")
+        # Creating dataloader
+        train_idxs = data_split_info[model_idx]["train"]
+        test_idxs = data_split_info[model_idx]["test"]
+        logger.info(
+            f"Training model {model_idx}: Train size {len(train_idxs)}, Test size {len(test_idxs)}"
+        )
+        logger.info("Creating dataloader...")
+        train_loader = get_dataloader_from_dataset(args.dataset, Subset(dataset, train_idxs), batch_size=args.batch_size, train=True)
+        test_loader = get_dataloader_from_dataset(args.dataset, Subset(dataset, test_idxs), batch_size=args.batch_size, train=False)
 
-    model = VGGSNN()
+        model = VGGSNN()
 
-    parallel_model = torch.nn.DataParallel(model)
-    parallel_model.to(device)
+        parallel_model = torch.nn.DataParallel(model)
+        parallel_model.to(device)
 
-    criterion = nn.CrossEntropyLoss().to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+        criterion = nn.CrossEntropyLoss().to(device)
+        optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
-    scheduler =  torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, eta_min=0, T_max=args.epochs)
+        scheduler =  torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, eta_min=0, T_max=args.epochs)
 
-    best_acc = 0
-    best_epoch = 0
-    
-    logger = get_logger('exp.log')
-    logger.info('start training!')
-    
-    for epoch in range(args.epochs):
-    
-        loss, acc = train(parallel_model, device, train_loader, criterion, optimizer, epoch, args)
-        logger.info('Epoch:[{}/{}]\t loss={:.5f}\t acc={:.3f}'.format(epoch , args.epochs, loss, acc ))
-        scheduler.step()
-        facc = test(parallel_model, test_loader, device)
-        logger.info('Epoch:[{}/{}]\t Test acc={:.3f}'.format(epoch , args.epochs, facc ))
+        best_acc = 0
+        best_epoch = 0
+        
+        logger = get_logger('exp.log')
+        logger.info('start training!')
+        
+        for epoch in range(args.epochs):
+        
+            loss, acc = train(parallel_model, device, train_loader, criterion, optimizer, epoch, args)
+            logger.info('Epoch:[{}/{}]\t loss={:.5f}\t acc={:.3f}'.format(epoch , args.epochs, loss, acc ))
+            scheduler.step()
+            facc = test(parallel_model, test_loader, device)
+            logger.info('Epoch:[{}/{}]\t Test acc={:.3f}'.format(epoch , args.epochs, facc ))
 
-        if best_acc < facc:
-            best_acc = facc
-            best_epoch = epoch + 1
-            # torch.save(parallel_model.module.state_dict(), 'VGGSNN_woAP.pth')
-        logger.info('Best Test acc={:.3f}'.format(best_acc ))
-        print('\n')
+            if best_acc < facc:
+                best_acc = facc
+                best_epoch = epoch + 1
+                # torch.save(parallel_model.module.state_dict(), 'VGGSNN_woAP.pth')
+            logger.info('Best Test acc={:.3f}'.format(best_acc ))
+            print('\n')
