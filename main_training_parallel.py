@@ -133,6 +133,11 @@ if __name__ == '__main__':
     seed_all(args.seed)
     primary_model_path = os.path.join("saved_models", args.dataset, args.model, f"ref_models_{args.reference_models}")
     for model_idx in range(0, args.reference_models+1):
+        full_model_path = os.path.join(primary_model_path, f"model_{model_idx}")
+        if os.path.exists(full_model_path) is False:
+            print("Creating model directory:", full_model_path)
+            os.makedirs(full_model_path)
+        save_path = os.path.join(full_model_path, "VGGSNN.pth")
         if model_idx==0:
         # Load the dataset using the specified parameters
             dataset = load_dataset(args.dataset)
@@ -180,6 +185,6 @@ if __name__ == '__main__':
             if best_acc < facc:
                 best_acc = facc
                 best_epoch = epoch + 1
-                # torch.save(parallel_model.module.state_dict(), 'VGGSNN_woAP.pth')
+                torch.save(model.state_dict(), save_path)
             logger.info('Best Test acc={:.3f}'.format(best_acc ))
             print('\n')
