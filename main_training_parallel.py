@@ -159,7 +159,7 @@ if __name__ == '__main__':
         train_loader = get_dataloader_from_dataset(args.dataset, Subset(dataset, train_idxs), batch_size=args.batch_size, train=True)
         test_loader = get_dataloader_from_dataset(args.dataset, Subset(dataset, test_idxs), batch_size=args.batch_size, train=False)
 
-        model = resnet19()
+        model = resnet19(num_classes=100)
 
         parallel_model = torch.nn.DataParallel(model)
         parallel_model.to(device)

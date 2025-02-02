@@ -177,7 +177,7 @@ def resnet19(pretrained=False, progress=True, **kwargs):
 
 
 if __name__ == '__main__':
-    model = resnet19(num_classes=10)
+    model = resnet19(num_classes=100)
     model.T = 3
     x = torch.rand(2,3,32,32)
     y = model(x)
